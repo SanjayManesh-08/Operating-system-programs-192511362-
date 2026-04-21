@@ -1,0 +1,57 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/wait.h>
+
+#define MSG_KEY  0x5678          
+#define MSG_TYPE 1               
+#define MSG_SIZE 256             
+
+typedef struct {
+    long  mtype;
+    char  mtext[MSG_SIZE];
+} Message;
+
+int main(void)
+{
+    int     msgid;
+    pid_t   pid;
+    Message msg;
+    msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
+    if (msgid < 0) {
+        perror("msgget failed");
+        exit(EXIT_FAILURE);
+    }
+    printf("[Parent] Message queue created. msgid = %d\n", msgid);
+    pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+        exit(EXIT_FAILURE);
+    }
+    if (pid == 0) {
+        msg.mtype = MSG_TYPE;
+        strncpy(msg.mtext,
+                "Greetings from Child! This is an IPC message queue demo.",
+                MSG_SIZE - 1);
+        msg.mtext[MSG_SIZE - 1] = '\0';
+
+        if (msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0) < 0) {
+            perror("msgsnd failed");
+            exit(EXIT_FAILURE);
+        }
+        printf("[Child]  Sent    : \"%s\"\n", msg.mtext);
+        exit(EXIT_SUCCESS);
+    }
+    wait(NULL);
+    if (msgrcv(msgid, &msg, MSG_SIZE, MSG_TYPE, 0) < 0) {
+        perror("msgrcv failed");
+        exit(EXIT_FAILURE);
+    }
+    printf("[Parent] Received: \"%s\"\n", msg.mtext);
+    msgctl(msgid, IPC_RMID, NULL);
+    printf("[Parent] Message queue deleted.\n");
+    return 0;
+}
