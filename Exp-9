@@ -1,0 +1,59 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/wait.h>
+
+#define SHM_SIZE 1024         
+#define SHM_KEY  0x1234       
+ 
+int main(void)
+{
+    int    shmid;
+    char  *shm_ptr;
+    pid_t  pid;
+    shmid = shmget(SHM_KEY, SHM_SIZE, IPC_CREAT | 0666);
+    if (shmid < 0) {
+        perror("shmget failed");
+        exit(EXIT_FAILURE);
+    }
+    printf("[Parent] Shared memory segment created. shmid = %d\n", shmid);
+ 
+    pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+        exit(EXIT_FAILURE);
+    }
+ 
+    if (pid == 0) {
+        
+        shm_ptr = (char *) shmat(shmid, NULL, 0);
+        if (shm_ptr == (char *) -1) {
+            perror("shmat failed (child)");
+            exit(EXIT_FAILURE);
+        }  
+        const char *msg = "Hello from the Child Process via Shared Memory!";
+        strncpy(shm_ptr, msg, SHM_SIZE - 1);
+        shm_ptr[SHM_SIZE - 1] = '\0';
+ 
+        printf("[Child]  Written to shared memory: \"%s\"\n", shm_ptr);
+        shmdt(shm_ptr);
+        exit(EXIT_SUCCESS);
+    }
+    wait(NULL);   
+    shm_ptr = (char *) shmat(shmid, NULL, SHM_RDONLY);
+    if (shm_ptr == (char *) -1) {
+        perror("shmat failed (parent)");
+        exit(EXIT_FAILURE);
+    }
+ 
+    printf("[Parent] Read from shared memory : \"%s\"\n", shm_ptr);
+
+    shmdt(shm_ptr);
+    shmctl(shmid, IPC_RMID, NULL);
+    printf("[Parent] Shared memory segment removed.\n");
+ 
+    return 0;
+}
