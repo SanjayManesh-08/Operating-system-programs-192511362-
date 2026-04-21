@@ -1,0 +1,158 @@
+#include <stdio.h>
+#include <string.h>
+
+#define MAX_BLOCKS    10
+#define MAX_PROCESSES  5
+
+typedef struct {
+    int size;
+    int allocated;     /* 1 = occupied, 0 = free */
+} Block;
+
+static const int INITIAL_SIZES[MAX_BLOCKS] = {100, 500, 200, 300, 600,
+                                                 0,   0,   0,   0,   0};
+static const int NUM_BLOCKS     = 5;
+static const int PROCESS_SIZES[MAX_PROCESSES] = {212, 417, 112, 426, 50};
+static const int NUM_PROCESSES  = 5;
+void reset_blocks(Block blocks[], int n)
+{
+    for (int i = 0; i < n; i++) {
+        blocks[i].size      = INITIAL_SIZES[i];
+        blocks[i].allocated = 0;
+    }
+}
+void print_allocation(const char *strategy, int alloc[], int np)
+{
+    printf("\n  %-12s | %-15s | %s\n", "Strategy", "Process Size", "Block Assigned");
+    printf("  ------------|-----------------|---------------\n");
+    for (int i = 0; i < np; i++) {
+        if (alloc[i] == -1)
+            printf("  %-12s | %-15d | Not Allocated\n", strategy, PROCESS_SIZES[i]);
+        else
+            printf("  %-12s | %-15d | Block %d (size %d)\n",
+                   strategy, PROCESS_SIZES[i], alloc[i]+1,
+                   INITIAL_SIZES[alloc[i]]);
+    }
+}
+void first_fit(void)
+{
+    Block blocks[MAX_BLOCKS];
+    int   alloc[MAX_PROCESSES];
+    reset_blocks(blocks, NUM_BLOCKS);
+
+    for (int p = 0; p < NUM_PROCESSES; p++) {
+        alloc[p] = -1;
+        for (int b = 0; b < NUM_BLOCKS; b++) {
+            if (!blocks[b].allocated && blocks[b].size >= PROCESS_SIZES[p]) {
+                blocks[b].allocated = 1;
+                alloc[p] = b;
+                break;
+            }
+        }
+    }
+    print_allocation("First Fit", alloc, NUM_PROCESSES);
+}
+void best_fit(void)
+{
+    Block blocks[MAX_BLOCKS];
+    int   alloc[MAX_PROCESSES];
+    reset_blocks(blocks, NUM_BLOCKS);
+
+    for (int p = 0; p < NUM_PROCESSES; p++) {
+        alloc[p] = -1;
+        int best_idx  = -1;
+        int best_size = __INT_MAX__;
+
+        for (int b = 0; b < NUM_BLOCKS; b++) {
+            if (!blocks[b].allocated && blocks[b].size >= PROCESS_SIZES[p]) {
+                if (blocks[b].size < best_size) {
+                    best_size = blocks[b].size;
+                    best_idx  = b;
+                }
+            }
+        }
+        if (best_idx != -1) {
+            blocks[best_idx].allocated = 1;
+            alloc[p] = best_idx;
+        }
+    }
+    print_allocation("Best Fit", alloc, NUM_PROCESSES);
+}
+void worst_fit(void)
+{
+    Block blocks[MAX_BLOCKS];
+    int   alloc[MAX_PROCESSES];
+    reset_blocks(blocks, NUM_BLOCKS);
+
+    for (int p = 0; p < NUM_PROCESSES; p++) {
+        alloc[p] = -1;
+        int worst_idx  = -1;
+        int worst_size = -1;
+
+        for (int b = 0; b < NUM_BLOCKS; b++) {
+            if (!blocks[b].allocated && blocks[b].size >= PROCESS_SIZES[p]) {
+                if (blocks[b].size > worst_size) {
+                    worst_size = blocks[b].size;
+                    worst_idx  = b;
+                }
+            }
+        }
+        if (worst_idx != -1) {
+            blocks[worst_idx].allocated = 1;
+            alloc[p] = worst_idx;
+        }
+    }
+    print_allocation("Worst Fit", alloc, NUM_PROCESSES);
+}
+void next_fit(void)
+{
+    Block blocks[MAX_BLOCKS];
+    int   alloc[MAX_PROCESSES];
+    reset_blocks(blocks, NUM_BLOCKS);
+
+    int last = 0;   /* search starts from here */
+
+    for (int p = 0; p < NUM_PROCESSES; p++) {
+        alloc[p] = -1;
+        int count = 0;
+        int b     = last;
+
+        while (count < NUM_BLOCKS) {
+            if (!blocks[b].allocated && blocks[b].size >= PROCESS_SIZES[p]) {
+                blocks[b].allocated = 1;
+                alloc[p] = b;
+                last = (b + 1) % NUM_BLOCKS;
+                break;
+            }
+            b = (b + 1) % NUM_BLOCKS;
+            count++;
+        }
+    }
+    print_allocation("Next Fit", alloc, NUM_PROCESSES);
+}
+int main(void)
+{
+    printf("=== Memory Allocation Strategies ===\n");
+    printf("\nAvailable memory blocks (KB): ");
+    for (int i = 0; i < NUM_BLOCKS; i++)
+        printf("%d ", INITIAL_SIZES[i]);
+    printf("\nProcess sizes requested (KB): ");
+    for (int i = 0; i < NUM_PROCESSES; i++)
+        printf("%d ", PROCESS_SIZES[i]);
+    printf("\n");
+
+    printf("\n--- 1. First Fit ---");
+    first_fit();
+
+    printf("\n--- 2. Best Fit ---");
+    best_fit();
+
+    printf("\n--- 3. Worst Fit ---");
+    worst_fit();
+
+    printf("\n--- 4. Next Fit ---");
+    next_fit();
+
+    printf("\nDone.\n");
+    return 0;
+}
