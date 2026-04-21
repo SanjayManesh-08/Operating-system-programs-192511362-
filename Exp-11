@@ -1,0 +1,76 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+
+#define NUM_THREADS   5
+#define INCREMENTS    100000
+
+long          shared_counter = 0;
+pthread_mutex_t mutex         = PTHREAD_MUTEX_INITIALIZER;
+
+typedef struct {
+    int  thread_id;
+    long result;      
+} ThreadData;
+
+void *thread_function(void *arg)
+{
+    ThreadData *data = (ThreadData *) arg;
+    int id           = data->thread_id;
+
+    printf("  Thread %d started.\n", id);
+
+    long partial = 0;
+    for (int i = 1; i <= id * 10; i++)
+        partial += i;
+    data->result = partial;
+
+    for (int i = 0; i < INCREMENTS; i++) {
+        pthread_mutex_lock(&mutex);
+        shared_counter++;
+        pthread_mutex_unlock(&mutex);
+    }
+
+    printf("  Thread %d finished. Partial sum = %ld\n", id, partial);
+    return (void *) data;
+}
+
+int main(void)
+{
+    pthread_t  threads[NUM_THREADS];
+    ThreadData thread_data[NUM_THREADS];
+
+    printf("=== Multithreading Demo ===\n");
+    printf("Creating %d threads ...\n\n", NUM_THREADS);
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        thread_data[i].thread_id = i + 1;
+        thread_data[i].result    = 0;
+
+        int rc = pthread_create(&threads[i], NULL,
+                                thread_function, &thread_data[i]);
+        if (rc != 0) {
+            fprintf(stderr, "pthread_create failed for thread %d\n", i + 1);
+            exit(EXIT_FAILURE);
+        }
+    }
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    printf("\n--- Results ---\n");
+    for (int i = 0; i < NUM_THREADS; i++) {
+        printf("  Thread %d  |  Partial sum (1..%2d) = %ld\n",
+               thread_data[i].thread_id,
+               thread_data[i].thread_id * 10,
+               thread_data[i].result);
+    }
+
+    printf("\nExpected shared_counter : %ld\n", (long)NUM_THREADS * INCREMENTS);
+    printf("Actual   shared_counter : %ld\n", shared_counter);
+    printf("Mutex protection %s.\n",
+           shared_counter == (long)NUM_THREADS * INCREMENTS ? "WORKED" : "FAILED");
+
+    pthread_mutex_destroy(&mutex);
+    return 0;
+}
