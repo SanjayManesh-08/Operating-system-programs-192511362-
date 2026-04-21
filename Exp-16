@@ -1,0 +1,169 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_NAME_LEN  40
+#define MAX_DEPT_LEN  30
+#define DATA_FILE     "employees.dat"
+
+typedef struct {
+    int    id;
+    char   name[MAX_NAME_LEN];
+    char   department[MAX_DEPT_LEN];
+    double salary;
+    int    active;       
+} Employee;
+int record_count(FILE *fp)
+{
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    return (int)(size / sizeof(Employee));
+}
+void add_employee(int id, const char *name,
+                  const char *dept, double salary)
+{
+    FILE *fp = fopen(DATA_FILE, "ab");  
+    if (!fp) { perror("fopen"); return; }
+
+    Employee e;
+    e.id     = id;
+    e.salary = salary;
+    e.active = 1;
+    strncpy(e.name,       name, MAX_NAME_LEN - 1);
+    strncpy(e.department, dept, MAX_DEPT_LEN  - 1);
+    e.name[MAX_NAME_LEN - 1]       = '\0';
+    e.department[MAX_DEPT_LEN - 1] = '\0';
+
+    fwrite(&e, sizeof(Employee), 1, fp);
+    fclose(fp);
+    printf("  Added: [ID=%d] %s  Dept=%s  Salary=%.2f\n",
+           id, name, dept, salary);
+}
+void display_record(FILE *fp, int pos)
+{
+    Employee e;
+    fseek(fp, (long)pos * sizeof(Employee), SEEK_SET);
+    if (fread(&e, sizeof(Employee), 1, fp) != 1) {
+        printf("  ERROR: Could not read record at position %d.\n", pos);
+        return;
+    }
+    if (!e.active) {
+        printf("  Record %d has been deleted.\n", pos);
+        return;
+    }
+    printf("  [%d] ID=%-5d  Name=%-25s  Dept=%-20s  Salary=%.2f\n",
+           pos, e.id, e.name, e.department, e.salary);
+}
+void list_all(void)
+{
+    FILE *fp = fopen(DATA_FILE, "rb");
+    if (!fp) { printf("  [No data file found]\n"); return; }
+
+    int n = record_count(fp);
+    if (n == 0) { printf("  [File is empty]\n"); fclose(fp); return; }
+
+    printf("  %-4s %-6s %-25s %-20s %s\n",
+           "Pos", "ID", "Name", "Department", "Salary");
+    printf("  ---- ------ ------------------------- "
+           "-------------------- ----------\n");
+
+    for (int i = 0; i < n; i++) {
+        Employee e;
+        fseek(fp, (long)i * sizeof(Employee), SEEK_SET);
+        fread(&e, sizeof(Employee), 1, fp);
+        if (e.active)
+            printf("  %-4d %-6d %-25s %-20s %.2f\n",
+                   i, e.id, e.name, e.department, e.salary);
+        else
+            printf("  %-4d [DELETED]\n", i);
+    }
+    fclose(fp);
+}
+void update_salary(int pos, double new_salary)
+{
+    FILE *fp = fopen(DATA_FILE, "r+b");   /* read-write binary */
+    if (!fp) { perror("fopen"); return; }
+
+    Employee e;
+    fseek(fp, (long)pos * sizeof(Employee), SEEK_SET);
+    if (fread(&e, sizeof(Employee), 1, fp) != 1 || !e.active) {
+        printf("  ERROR: No active record at position %d.\n", pos);
+        fclose(fp); return;
+    }
+    e.salary = new_salary;
+    fseek(fp, (long)pos * sizeof(Employee), SEEK_SET);
+    fwrite(&e, sizeof(Employee), 1, fp);
+    fclose(fp);
+    printf("  Updated record %d: new salary = %.2f\n", pos, new_salary);
+}
+void delete_record(int pos)
+{
+    FILE *fp = fopen(DATA_FILE, "r+b");
+    if (!fp) { perror("fopen"); return; }
+
+    Employee e;
+    fseek(fp, (long)pos * sizeof(Employee), SEEK_SET);
+    if (fread(&e, sizeof(Employee), 1, fp) != 1) {
+        printf("  ERROR: Could not read position %d.\n", pos);
+        fclose(fp); return;
+    }
+    e.active = 0;
+    fseek(fp, (long)pos * sizeof(Employee), SEEK_SET);
+    fwrite(&e, sizeof(Employee), 1, fp);
+    fclose(fp);
+    printf("  Record at position %d (ID=%d) marked as deleted.\n", pos, e.id);
+}
+void search_by_id(int target_id)
+{
+    FILE *fp = fopen(DATA_FILE, "rb");
+    if (!fp) { printf("  [No data file]\n"); return; }
+
+    int n = record_count(fp);
+    int found = 0;
+    for (int i = 0; i < n; i++) {
+        Employee e;
+        fseek(fp, (long)i * sizeof(Employee), SEEK_SET);
+        fread(&e, sizeof(Employee), 1, fp);
+        if (e.active && e.id == target_id) {
+            printf("  FOUND at position %d: %s | %s | %.2f\n",
+                   i, e.name, e.department, e.salary);
+            found = 1;
+            break;
+        }
+    }
+    if (!found) printf("  Employee ID %d not found.\n", target_id);
+    fclose(fp);
+}
+int main(void)
+{
+    remove(DATA_FILE);
+
+    printf("=== Random Access File – Employee Records ===\n\n");
+    printf("[1] Adding records:\n");
+    add_employee(101, "Alice Johnson",   "Engineering",    75000.00);
+    add_employee(102, "Bob Smith",       "Marketing",      62000.00);
+    add_employee(103, "Carol Williams",  "HR",             58000.00);
+    add_employee(104, "David Brown",     "Engineering",    80000.00);
+    add_employee(105, "Eva Martinez",    "Finance",        70000.00);
+    printf("\n[2] All employee records:\n");
+    list_all();
+    printf("\n[3] Direct access – read record at position 2:\n");
+    {
+        FILE *fp = fopen(DATA_FILE, "rb");
+        if (fp) { display_record(fp, 2); fclose(fp); }
+    }
+    printf("\n[4] Search by Employee ID = 104:\n");
+    search_by_id(104);
+
+    printf("\n[5] Update salary at position 1 to 68000.00:\n");
+    update_salary(1, 68000.00);
+
+    printf("\n[6] Delete record at position 3:\n");
+    delete_record(3);
+
+    printf("\n[7] Final employee records:\n");
+    list_all();
+
+    remove(DATA_FILE);
+    return 0;
+}
