@@ -1,0 +1,167 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_USERS        10
+#define MAX_FILES_PER_USER 10
+#define MAX_NAME_LEN       50
+
+typedef struct {
+    char name[MAX_NAME_LEN];
+    int  size;      /* KB */
+} FileEntry;
+
+typedef struct {
+    char      username[MAX_NAME_LEN];
+    FileEntry files[MAX_FILES_PER_USER];
+    int       file_count;
+} UserDir;
+
+UserDir mfd[MAX_USERS];   
+int     user_count = 0;
+
+int find_user(const char *username)
+{
+    for (int i = 0; i < user_count; i++)
+        if (strcmp(mfd[i].username, username) == 0)
+            return i;
+    return -1;
+}
+int find_file(int uid, const char *filename)
+{
+    for (int j = 0; j < mfd[uid].file_count; j++)
+        if (strcmp(mfd[uid].files[j].name, filename) == 0)
+            return j;
+    return -1;
+}
+void create_user(const char *username)
+{
+    if (user_count >= MAX_USERS) {
+        printf("  ERROR: Maximum users reached.\n"); return;
+    }
+    if (find_user(username) != -1) {
+        printf("  ERROR: User '%s' already exists.\n", username); return;
+    }
+    strncpy(mfd[user_count].username, username, MAX_NAME_LEN - 1);
+    mfd[user_count].file_count = 0;
+    user_count++;
+    printf("  User '%s' created.\n", username);
+}
+void delete_user(const char *username)
+{
+    int uid = find_user(username);
+    if (uid == -1) {
+        printf("  ERROR: User '%s' not found.\n", username); return;
+    }
+    for (int i = uid; i < user_count - 1; i++)
+        mfd[i] = mfd[i + 1];
+    user_count--;
+    printf("  User '%s' and all their files deleted.\n", username);
+}
+void create_file(const char *username, const char *filename, int size)
+{
+    int uid = find_user(username);
+    if (uid == -1) {
+        printf("  ERROR: User '%s' not found.\n", username); return;
+    }
+    if (mfd[uid].file_count >= MAX_FILES_PER_USER) {
+        printf("  ERROR: User '%s' directory is full.\n", username); return;
+    }
+    if (find_file(uid, filename) != -1) {
+        printf("  ERROR: File '%s' already exists for user '%s'.\n",
+               filename, username);
+        return;
+    }
+    FileEntry *fe = &mfd[uid].files[mfd[uid].file_count++];
+    strncpy(fe->name, filename, MAX_NAME_LEN - 1);
+    fe->size = size;
+    printf("  File '%s/%s' created (size=%d KB).\n", username, filename, size);
+}
+void delete_file(const char *username, const char *filename)
+{
+    int uid = find_user(username);
+    if (uid == -1) {
+        printf("  ERROR: User '%s' not found.\n", username); return;
+    }
+    int fid = find_file(uid, filename);
+    if (fid == -1) {
+        printf("  ERROR: File '%s' not found for user '%s'.\n",
+               filename, username);
+        return;
+    }
+    for (int j = fid; j < mfd[uid].file_count - 1; j++)
+        mfd[uid].files[j] = mfd[uid].files[j + 1];
+    mfd[uid].file_count--;
+    printf("  File '%s/%s' deleted.\n", username, filename);
+}
+void search_file(const char *username, const char *filename)
+{
+    int uid = find_user(username);
+    if (uid == -1) {
+        printf("  ERROR: User '%s' not found.\n", username); return;
+    }
+    int fid = find_file(uid, filename);
+    if (fid == -1)
+        printf("  File '%s/%s' NOT found.\n", username, filename);
+    else
+        printf("  File '%s/%s' FOUND (size=%d KB).\n",
+               username, filename, mfd[uid].files[fid].size);
+}
+void list_mfd(void)
+{
+    printf("  %-15s  %-20s  %s\n", "User", "File Name", "Size(KB)");
+    printf("  ---------------  --------------------  --------\n");
+    for (int i = 0; i < user_count; i++) {
+        if (mfd[i].file_count == 0) {
+            printf("  %-15s  [no files]\n", mfd[i].username);
+        } else {
+            for (int j = 0; j < mfd[i].file_count; j++) {
+                if (j == 0)
+                    printf("  %-15s  %-20s  %d\n",
+                           mfd[i].username,
+                           mfd[i].files[j].name,
+                           mfd[i].files[j].size);
+                else
+                    printf("  %-15s  %-20s  %d\n",
+                           "",
+                           mfd[i].files[j].name,
+                           mfd[i].files[j].size);
+            }
+        }
+    }
+}
+int main(void)
+{
+    printf("=== Two-Level Directory Structure Simulation ===\n\n");
+
+    printf("[1] Creating users:\n");
+    create_user("alice");
+    create_user("bob");
+    create_user("charlie");
+
+    printf("\n[2] Creating files:\n");
+    create_file("alice",   "resume.txt",  45);
+    create_file("alice",   "photo.jpg",   1024);
+    create_file("bob",     "resume.txt",  30);   /* same name, different user */
+    create_file("bob",     "project.c",   8);
+    create_file("charlie", "data.csv",    200);
+
+    printf("\n[3] Directory listing (MFD):\n");
+    list_mfd();
+
+    printf("\n[4] Search operations:\n");
+    search_file("alice",   "photo.jpg");
+    search_file("bob",     "photo.jpg");   /* exists for alice, not bob */
+    search_file("charlie", "data.csv");
+
+    printf("\n[5] Delete 'alice/photo.jpg':\n");
+    delete_file("alice", "photo.jpg");
+
+    printf("\n[6] Delete user 'charlie':\n");
+    delete_user("charlie");
+
+    printf("\n[7] Final MFD listing:\n");
+    list_mfd();
+
+    return 0;
+}
